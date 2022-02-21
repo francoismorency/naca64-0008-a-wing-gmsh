@@ -1,4 +1,6 @@
-Include "naca-64A008-coordinate.geo";
+Include "airfoil-nasa-64A008.geo";
+//create a point to close the leading edge
+Point(589)= {1.000030e+00, 0.000000, 0.000000e+00};
 Geometry.Tolerance = 0.1e-8;
 Geometry.MatchMeshTolerance = 1e-10;
 Geometry.AutoCoherence=0;
@@ -114,7 +116,12 @@ twist_angle=0*Pi/180; //l'angle de rotation de l'aile
 lcar=root_ch;
 le=lcar/50;
 ld=3*lcar;
-
+// definir le nombre de noeuds a la racine et extremite de l'aile
+ncord_root=Round(root_ch/le);
+ncord_tip=ncord_root; 
+//l'espacement des noeuds est plus grand dans le span
+nspan=Round(demi_span/(2.0*le));
+Printf("Wing: nombre de noeuds corde = %f et envergure = %f", ncord_root, nspan );
 
 //Creation de l'aile 
 
@@ -139,8 +146,8 @@ Rotate {{0,1,0}, {0, 0, 0}, -Pi} { Point{1:(589*(nb_sec-1))+589}; }
 Rotate {{1, 0, 0}, {0, 0, 0}, -Pi/2} { Point{1:(589*(nb_sec-1))+589}; }
 //
 // creation du profil à la racine
-Spline(1)={1:294};
-Spline(2)={294,589:296,1};
+Spline(1)={1:294,589};
+Spline(2)={589:296,1};
 Curve Loop(1) = {2,1};
 // creation du profil à l'extremite
 Spline(4)={(589*(nb_sec-1)+1):((589*(nb_sec-1)+1)+293),((589*(nb_sec-1)+1)+588)};
@@ -170,7 +177,20 @@ Surface (3) = {4};
 Surface loop(1)={1,2,3};
 Surface Loop(2) = {3, 35, 2, 1};
 
+//definir le nombre de neouds sur le arrete de l'aile
+//profil racine
+Transfinite Curve {1} = ncord_root Using Bump 0.04;
+Transfinite Curve {2} = ncord_root Using Bump 0.04;
+//profil extremite
+Transfinite Curve {4} = ncord_tip Using Bump 0.08 ;
+Transfinite Curve {5} = ncord_tip Using Bump 0.08;
+//arrete bord de fuite et bord d'attaque
+Transfinite Curve {7} = nspan ;
+Transfinite Curve {9} = nspan ;
+// pour que les courbes transfinite soient utile il faut aussi surface
+Transfinite Surface {2,3};
 
+// dimension maillage domaine externe
 // ld est la taille des elements sur la  frontiere externe
 pt_cyl[]={};
 pt_rec[]={};
@@ -253,160 +273,50 @@ fact=50;
 rt=0.4;
 //
 // The field definitions are used for the mesh
-//+
-Field[1] = Frustum;
-//+
-Field[1].InnerR1 = linco*lcar;
-//+
-Field[1].InnerR2 = linco*lcar*rt;
-//+
-Field[1].InnerV1 = lde;
-//+
-Field[1].InnerV2 = lde*rt;
-//+
-Field[1].OuterR1 = ld;
-//+
-Field[1].OuterR2 = ld*rt;
-//+
-Field[1].OuterV1 = fact*lde;
 //
-Field[1].OuterV2 = fact*lde*rt;
-//+
-Field[1].X1 = d2;
-//+
-Field[1].X2 = d5;
-//+
-Field[1].Y1 = -d1;
-//+
-Field[1].Y2 = 1.524+d4;
-//+
-Field[1].Z1 = d3;
-//+
-Field[1].Z2 = d6;
-fact_2=0.6;
-
-Field[2] = Frustum;
-//+
-Field[2].InnerR1 = 0;
-//+
-Field[2].InnerR2 = 0;
-//+
-Field[2].InnerV1 = lde*fact_2;
-//+
-Field[2].InnerV2 = lde*fact_2*rt;
-//+
-Field[2].OuterR1 = linco*lcar;
-//+
-Field[2].OuterR2 = linco*lcar*rt;
-//+
-Field[2].OuterV1 = lde;
+// création du maillage
+// distance leading edge
+Field[1] = Distance;
+Field[1].CurvesList = {9};
+Field[1].NumPointsPerCurve = 600;
+// size treshold based on distance from leading edge
+Field[2] = Threshold;
+Field[2].InField = 2;
+Field[2].SizeMin = lcar / 100;
+Field[2].SizeMax = ld ;
+Field[2].DistMin = 0.1*lcar;
+Field[2].DistMax = 10.0*lcar;
+// Raffinement du maillage proche du trailing edge
+//Distance near trailing edge and tip
+Field[3] = Distance;
+//Field[3].CurvesList = {4,5,6,7};
+Field[3].CurvesList = {7};
+Field[3].PointsList = {1178,590};
+Field[3].NumPointsPerCurve = 600;
+// utilisation de la fonction threshold
+// We then define a `Threshold' field, which uses the return value of the
+// `Distance' field 1 in order to define a simple change in element size
+// depending on the computed distances
 //
-Field[2].OuterV2 = lde*rt;
-//+
-Field[2].X1 = d2;
-//+
-Field[2].X2 = d5;
-//+
-Field[2].Y1 = -d1;
-//+
-Field[2].Y2 = 1.524+d4;
-//+
-Field[2].Z1 =d3;
-//+
-Field[2].Z2 = d6;
-//
-x2=Point{1178};
-x1=Point{589};
-ommega = Atan((x2[0]-x1[0])/1.524);
-gamma = Atan((x2[0]-x1[0])/(x2[2]-x1[2]));
-teta =  Atan((x2[2]-x1[2])/1.524);
-d1 = 0.6;
-linco=(1-d1*(0.4-1)/1.524)*0.06;
-d2 = x1[0]-d1*ommega;
-d3 = x1[2]+d1*teta;
-d4= 0.08;
-d5 = x2[0]+d4*ommega;
-d6 = x2[2]-d4*teta;
-//
-ldt=lcar/90;
-fact_4=45;
-Field[3] = Frustum;
-//+
-Field[3].InnerR1 = linco*lcar;
-//+
-Field[3].InnerR2 = linco*lcar*rt;
-//+
-Field[3].InnerV1 = ldt;
-//+
-Field[3].InnerV2 = ldt*rt;
-//+
-Field[3].OuterR1 = ld;
-//+
-Field[3].OuterR2 = ld;
-//+
-Field[3].OuterV1 = ldt*fact_4;
-//
-Field[3].OuterV2 = ldt*fact_4*rt;
-Field[3].X1 = d2;
-//+
-Field[3].X2 = d5;
-//+
-Field[3].Y1 = -d1;
-//+
-Field[3].Y2 = 1.524+d4;
-//+
-Field[3].Z1 = d3;
-//+
-Field[3].Z2 = d6;
-Field[4] = Frustum;
-fact_3=0.5625;
-//+
-Field[4].InnerR1 = 0;
-//+
-Field[4].InnerR2 = 0;
-//=
-Field[4].InnerV1 = lde*fact_3;
-//+
-Field[4].InnerV2 = lde*fact_3*rt;
-//+
-Field[4].OuterR1 = linco*lcar;
-//+
-Field[4].OuterR2 = linco*lcar*rt;
-//+
-Field[4].OuterV1 = ldt;
-//
-Field[4].OuterV2 = ldt*rt;
-//+
-Field[4].X1 = d2;
-Field[4].X2 = d5;
-//+
-Field[4].Y1 = -d1;
-Field[4].Y2 = 1.524+d4;
-Field[4].Z1 = d3;
-Field[4].Z2 = d6;
-
-
-Field[5] = Distance;
-Field[5].CurvesList = {4,5};
-Field[5].NumPointsPerCurve = 90;
-Field[6] = Threshold;
-Field[6].InField = 5;
-Field[6].SizeMin = lcar*0.4/80;
-Field[6].SizeMax = ld;
-Field[6].DistMin = 2*lcar*0.4/80;
-Field[6].DistMax = lcar;
-
-Field[7] = Distance;
-Field[7].CurvesList = {1,2};
-Field[7].NumPointsPerCurve = 80;
-Field[8] = Threshold;
-Field[8].InField = 7;
-Field[8].SizeMin = lcar/80;
-Field[8].SizeMax = ld;
-Field[8].DistMin = 2*lcar/80;
-Field[8].DistMax = lcar;
+// SizeMax -                     /------------------
+//                              /
+//                             /
+//                            /
+// SizeMin -o----------------/
+//          |                |    |
+//        Point         DistMin  DistMax
+Field[4] = Threshold;
+Field[4].InField = 3;
+Field[4].SizeMin = lcar / 100;
+Field[4].SizeMax = ld ;
+//la distance doit être lié au nombre de noeuds 
+//le long du bord de fuite pour avoir des éléments réguliers 
+Field[4].DistMin = 0.10*lcar;
+Field[4].DistMax = 10.0*lcar;
+// garder la distance la plus petite
+// No wake for Euler
 Field[15] = Min;
-Field[15].FieldsList = {1,2,3,4,6,8};
+Field[15].FieldsList = {2,4};
 Background Field = 15;
 
 
